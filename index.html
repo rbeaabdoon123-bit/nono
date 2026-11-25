@@ -1,0 +1,294 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Finder | محرك البحث</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,Arial,sans-serif;
+  background:#0b1020;
+  color:#f4f7ff;
+  min-height:100vh;
+}
+header{
+  text-align:center;
+  padding:45px 15px 25px;
+}
+.logo{
+  display:inline-flex;
+  width:75px;height:75px;
+  align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#6857ff,#00c8ff);
+  border-radius:23px;
+  font-size:35px;
+  box-shadow:0 10px 40px #3445ff40;
+}
+h1{margin:18px 0 8px;font-size:29px}
+.subtitle{color:#9eacc7;font-size:14px}
+.container{
+  max-width:850px;
+  margin:auto;
+  padding:15px;
+}
+.searchbox{
+  display:flex;
+  gap:9px;
+  padding:9px;
+  background:#171f34;
+  border:1px solid #2b3751;
+  border-radius:17px;
+}
+input{
+  flex:1;min-width:0;
+  border:0;outline:0;
+  background:transparent;
+  color:white;
+  padding:12px;
+  font-size:16px;
+}
+button{
+  border:0;cursor:pointer;
+  font-weight:bold;
+  border-radius:12px;
+}
+.searchbtn{
+  background:linear-gradient(135deg,#6857ff,#298cff);
+  color:white;padding:0 22px;
+  font-size:15px;
+}
+.searchbtn:disabled{opacity:.6}
+#status{
+  text-align:center;
+  color:#a9b8d3;
+  padding:22px 5px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:14px;
+}
+.card{
+  background:#151e31;
+  border:1px solid #26334b;
+  border-radius:17px;
+  overflow:hidden;
+}
+.preview{
+  height:155px;
+  background:#202b40;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  color:#9aacc8;
+}
+.preview img{
+  width:100%;height:100%;
+  object-fit:cover;
+}
+.cardbody{padding:14px}
+.card h3{
+  font-size:14px;
+  line-height:1.7;
+  margin:0 0 12px;
+  overflow-wrap:anywhere;
+}
+.actions{
+  display:flex;gap:8px;
+}
+.actions a{
+  flex:1;text-align:center;
+  text-decoration:none;
+  padding:10px 6px;
+  font-size:12px;
+  border-radius:10px;
+}
+.open{
+  color:white;background:#356dff;
+}
+.share{
+  color:#8de1ff;background:#20364b;
+}
+.note{
+  margin-top:25px;
+  padding:14px;
+  border:1px solid #27354d;
+  border-radius:14px;
+  color:#9eacc7;
+  font-size:12px;
+  line-height:1.8;
+}
+footer{
+  text-align:center;
+  padding:25px;
+  color:#74829c;
+  font-size:12px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">🎬</div>
+  <h1>Video Finder</h1>
+  <div class="subtitle">ابحث عن ملفات الفيديو المتاحة عبر الإنترنت</div>
+</header>
+
+<main class="container">
+
+  <form id="searchForm" class="searchbox">
+    <input
+      id="query"
+      type="search"
+      placeholder="اكتب كلمة البحث..."
+      required
+    >
+    <button id="searchBtn" class="searchbtn">بحث 🔍</button>
+  </form>
+
+  <div id="status">اكتب كلمة البحث لعرض النتائج</div>
+
+  <div id="results" class="grid"></div>
+
+  <div class="note">
+    📌 تعرض الصفحة ملفات الفيديو الموجودة في Wikimedia Commons.
+    تحقق من ترخيص كل ملف قبل إعادة استخدامه. هذه الصفحة لا تستخرج
+    فيديوهات من المواقع المحمية ولا تنزّلها تلقائياً.
+  </div>
+
+</main>
+
+<footer>
+  Video Finder · Mobile Search
+</footer>
+
+<script>
+const form = document.getElementById("searchForm");
+const queryInput = document.getElementById("query");
+const resultsBox = document.getElementById("results");
+const statusBox = document.getElementById("status");
+const searchBtn = document.getElementById("searchBtn");
+
+const API = "https://commons.wikimedia.org/w/api.php";
+
+form.addEventListener("submit", async function(e){
+  e.preventDefault();
+
+  const query = queryInput.value.trim();
+  if(!query) return;
+
+  resultsBox.innerHTML = "";
+  statusBox.textContent = "⏳ جاري البحث...";
+  searchBtn.disabled = true;
+
+  try{
+    const params = new URLSearchParams({
+      action:"query",
+      format:"json",
+      origin:"*",
+      generator:"search",
+      gsrsearch:"filetype:video " + query,
+      gsrnamespace:"6",
+      gsrlimit:"30",
+      prop:"imageinfo",
+      iiprop:"url|mime|thumburl",
+      iiurlwidth:"400"
+    });
+
+    const response = await fetch(API + "?" + params);
+    if(!response.ok) throw new Error("فشل الاتصال بمصدر البحث");
+
+    const data = await response.json();
+    const pages = Object.values(data.query?.pages || {});
+
+    const videos = pages.filter(p=>{
+      const info = p.imageinfo?.[0];
+      return info && info.mime &&
+             info.mime.startsWith("video/");
+    }).slice(0,10);
+
+    if(videos.length === 0){
+      statusBox.textContent = "لم نجد نتائج فيديو لهذه الكلمة.";
+      return;
+    }
+
+    statusBox.textContent = "عدد النتائج: " + videos.length;
+
+    videos.forEach((video,index)=>{
+      const info = video.imageinfo[0];
+      const title = video.title.replace("File:","");
+      const pageUrl =
+        "https://commons.wikimedia.org/wiki/" +
+        encodeURIComponent(video.title.replaceAll(" ","_"));
+
+      const directUrl = info.url || pageUrl;
+      const thumbnail = info.thumburl || "";
+
+      const telegramShare =
+        "https://t.me/share/url?url=" +
+        encodeURIComponent(pageUrl) +
+        "&text=" +
+        encodeURIComponent(title);
+
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const preview = document.createElement("div");
+      preview.className = "preview";
+
+      if(thumbnail){
+        const img = document.createElement("img");
+        img.src = thumbnail;
+        img.alt = title;
+        img.loading = "lazy";
+        preview.appendChild(img);
+      }else{
+        preview.textContent = "🎞️ فيديو";
+      }
+
+      const body = document.createElement("div");
+      body.className = "cardbody";
+
+      const heading = document.createElement("h3");
+      heading.textContent = (index+1) + ". " + title;
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+
+      const open = document.createElement("a");
+      open.className = "open";
+      open.href = pageUrl;
+      open.target = "_blank";
+      open.rel = "noopener";
+      open.textContent = "عرض الفيديو";
+
+      const share = document.createElement("a");
+      share.className = "share";
+      share.href = telegramShare;
+      share.target = "_blank";
+      share.rel = "noopener";
+      share.textContent = "مشاركة تيليجرام";
+
+      actions.append(open,share);
+      body.append(heading,actions);
+      card.append(preview,body);
+      resultsBox.appendChild(card);
+    });
+
+  }catch(err){
+    statusBox.textContent =
+      "حدث خطأ أثناء البحث. حاول مرة أخرى.";
+  }finally{
+    searchBtn.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>
